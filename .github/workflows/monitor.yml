@@ -1,9 +1,5 @@
 name: IP Monitor
 on:
-  schedule:
-    # Запуск каждые 10 минут
-    - cron: '*/10 * * * *'
-  # Позволяет запускать скрипт вручную кнопкой на сайте
   workflow_dispatch:
 
 jobs:
