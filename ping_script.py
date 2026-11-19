@@ -33,35 +33,42 @@ def main():
     creds_dict = json.loads(creds_json)
     client = gspread.service_account_from_dict(creds_dict)
 
-    sheet = client.open_by_key(sheet_id).worksheet("Мониторинг")
-    
-    # Читаем IP из столбца A (начиная со 2-й строки)
-    all_values = sheet.col_values(1)
+    spreadsheet = client.open_by_key(sheet_id)
+    main_sheet = spreadsheet.worksheet("Мониторинг")
+
+    # Читаем IP из столбца A главного листа (начиная со 2-й строки)
+    all_values = main_sheet.col_values(1)
     if len(all_values) < 2:
         print("Список адресов пуст.")
         return
-        
-    ips = all_values[1:]
-    
-    # Пингуем все IP параллельно для максимальной скорости
+
+    # Очищаем список от пустых строк
+    ips = [str(ip).strip() for ip in all_values[1:] if str(ip).strip()]
+
+    # Пингуем все IP параллельно
     with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
         ping_results = list(executor.map(ping_ip, ips))
 
-    # Текущее время (Киев, UTC+2 / UTC+3 в зависимости от сезона)
+    # Текущее время (Киев, UTC+2)
     tz = timezone(timedelta(hours=2))
     now_str = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
 
-    rows_to_update = []
-    for status in ping_results:
-        if status == "":
-            rows_to_update.append(["", ""])
-        else:
-            rows_to_update.append([status, now_str])
+    # Получаем список уже существующих вкладок в таблице
+    existing_sheets = {ws.title: ws for ws in spreadsheet.worksheets()}
 
-    # Записываем результат в таблицу одним запросом
-    end_row = len(rows_to_update) + 1
-    sheet.update(range_name=f"B2:C{end_row}", values=rows_to_update)
-    print(f"Проверка успешно завершена. Обработано записей: {len(rows_to_update)}")
+    # Записываем результат для каждого IP в его личную вкладку новой строкой
+    for ip, status in zip(ips, ping_results):
+        if ip in existing_sheets:
+            ip_sheet = existing_sheets[ip]
+        else:
+            # Если вкладки для этого IP ещё нет — создаём её и добавляем шапку
+            ip_sheet = spreadsheet.add_worksheet(title=ip, rows=1000, cols=5)
+            ip_sheet.append_row(["Дата и время", "Статус"])
+
+        # Добавляем новую строчку с результатом в конец вкладки
+        ip_sheet.append_row([now_str, status])
+
+    print(f"Проверка успешно завершена. Обновлено вкладок: {len(ips)}")
 
 if __name__ == "__main__":
     main()
