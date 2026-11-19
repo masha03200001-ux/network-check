@@ -1,0 +1,30 @@
+yaml
+name: IP Monitor
+
+on:
+  schedule:
+    # Запуск каждые 10 минут
+    - cron: '*/10 * * * *'
+  # Позволяет запускать скрипт вручную кнопкой на сайте
+  workflow_dispatch:
+
+jobs:
+  ping-job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Скачивание кода
+        uses: actions/checkout@v4
+
+      - name: Установка Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Установка библиотек для Google Таблиц
+        run: pip install gspread google-auth
+
+      - name: Запуск проверки IP
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+        run: python ping_script.py
