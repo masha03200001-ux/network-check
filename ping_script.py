@@ -40,12 +40,7 @@ def main():
 
     # Авторизация в Google Таблицах
     creds_dict = json.loads(creds_json)
-    scopes = [
-        "https://googleapis.com",
-        "https://googleapis.com"
-    ]
-    creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-    client = gspread.authorize(creds)
+    client = gspread.service_account_from_dict(creds_dict)
 
     sheet = client.open_by_key(sheet_id).worksheet("Мониторинг")
     
