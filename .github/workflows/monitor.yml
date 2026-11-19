@@ -1,6 +1,4 @@
-
 name: IP Monitor
-
 on:
   schedule:
     # Запуск каждые 10 минут
