@@ -1,25 +1,35 @@
 import os
 import json
 import subprocess
+import subprocess
+import socket
 import concurrent.futures
 from datetime import datetime, timezone, timedelta
 import gspread
-from google.oauth2.service_account import Credentials
-
 def ping_ip(ip):
     ip = str(ip).strip()
     if not ip:
         return ""
+    
+    # Способ 1: Обычный пинг (3 пакета с ожиданием до 5 секунд)
     try:
         subprocess.check_output(
-            ["ping", "-c", "1", "-W", "2", ip],
+            ["ping", "-c", "3", "-W", "5", ip],
             stderr=subprocess.STDOUT
         )
         return "Онлайн"
-    except subprocess.CalledProcessError:
-        return "Офлайн"
     except Exception:
-        return "Ошибка проверки"
+        pass
+
+    # Способ 2: Если пинг заблокирован провайдером, проверяем популярные порты (веб и MikroTik)
+    for port in (80, 443, 8291):
+        try:
+            with socket.create_connection((ip, port), timeout=3):
+                return "Онлайн"
+        except Exception:
+            continue
+
+    return "Офлайн"
 
 def main():
     creds_json = os.environ.get("GOOGLE_CREDENTIALS")
