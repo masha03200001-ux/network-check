@@ -9,26 +9,17 @@ from google.oauth2.service_account import Credentials
 def ping_ip(ip):
     ip = str(ip).strip()
     if not ip:
-        return ("", "")
-    
-    # Пингуем: 1 пакет, таймаут 2 секунды (для Linux серверов GitHub)
+        return ""
     try:
-        output = subprocess.check_output(
+        subprocess.check_output(
             ["ping", "-c", "1", "-W", "2", ip],
-            stderr=subprocess.STDOUT,
-            universal_newlines=True
+            stderr=subprocess.STDOUT
         )
-        # Извлекаем время задержки (time=XX.X ms)
-        latency = "ОК"
-        for part in output.split():
-            if part.startswith("time="):
-                latency = part.replace("time=", "")
-                break
-        return ("Онлайн", latency)
+        return "Онлайн"
     except subprocess.CalledProcessError:
-        return ("Офлайн", "-")
+        return "Офлайн"
     except Exception:
-        return ("Ошибка проверки", "-")
+        return "Ошибка проверки"
 
 def main():
     creds_json = os.environ.get("GOOGLE_CREDENTIALS")
@@ -60,17 +51,16 @@ def main():
     tz = timezone(timedelta(hours=2))
     now_str = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
 
-    # Формируем данные для записи в столбцы B, C, D
     rows_to_update = []
-    for status, latency in ping_results:
+    for status in ping_results:
         if status == "":
-            rows_to_update.append(["", "", ""])
+            rows_to_update.append(["", ""])
         else:
-            rows_to_update.append([status, latency, now_str])
+            rows_to_update.append([status, now_str])
 
     # Записываем результат в таблицу одним запросом
     end_row = len(rows_to_update) + 1
-    sheet.update(range_name=f"B2:D{end_row}", values=rows_to_update)
+    sheet.update(range_name=f"B2:C{end_row}", values=rows_to_update)
     print(f"Проверка успешно завершена. Обработано записей: {len(rows_to_update)}")
 
 if __name__ == "__main__":
