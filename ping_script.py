@@ -22,7 +22,7 @@ def ping_ip(ip):
         pass
 
     # Способ 2: Если пинг заблокирован провайдером, проверяем популярные порты (веб и MikroTik)
-    for port in (80, 443, 8291):
+    for port in (80, 443, 8291, 22):
         try:
             with socket.create_connection((ip, port), timeout=3):
                 return "Онлайн"
