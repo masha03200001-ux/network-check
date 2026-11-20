@@ -46,14 +46,27 @@ def main():
     spreadsheet = client.open_by_key(sheet_id)
     main_sheet = spreadsheet.worksheet("Мониторинг")
 
-    # Читаем IP из столбца A главного листа (начиная со 2-й строки)
-    all_values = main_sheet.col_values(1)
-    if len(all_values) < 2:
+    # Читаем все строки с листа Мониторинг (столбец A - IP, столбец D - Название города)
+    all_rows = main_sheet.get_all_values()
+    if len(all_rows) < 2:
         print("Список адресов пуст.")
         return
 
-    # Очищаем список от пустых строк
-    ips = [str(ip).strip() for ip in all_values[1:] if str(ip).strip()]
+    targets = []
+    for row in all_rows[1:]:
+        ip = str(row[0]).strip() if len(row) > 0 else ""
+        if not ip:
+            continue
+        # Берем название из столбца D (индекс 3) и делаем первую букву заглавной
+        raw_name = str(row[3]).strip() if len(row) > 3 else ""
+        name = raw_name.capitalize() if raw_name else ip
+        
+        # Убираем запрещенные для названий вкладок символы
+        for bad_char in ['[', ']', '*', '/', '\\', '?', ':']:
+            name = name.replace(bad_char, '-')
+        targets.append((ip, name))
+
+    ips = [t[0] for t in targets]
 
     # Пингуем все IP параллельно
     with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
@@ -66,19 +79,18 @@ def main():
     # Получаем список уже существующих вкладок в таблице
     existing_sheets = {ws.title: ws for ws in spreadsheet.worksheets()}
 
-    # Записываем результат для каждого IP в его личную вкладку новой строкой
-    for ip, status in zip(ips, ping_results):
-        if ip in existing_sheets:
-            ip_sheet = existing_sheets[ip]
+    # Записываем результат для каждого города в его вкладку
+    for (ip, name), status in zip(targets, ping_results):
+        if name in existing_sheets:
+            target_sheet = existing_sheets[name]
         else:
-            # Если вкладки для этого IP ещё нет — создаём её и добавляем шапку
-            ip_sheet = spreadsheet.add_worksheet(title=ip, rows=1000, cols=5)
-            ip_sheet.append_row(["Дата и время", "Статус"])
+            target_sheet = spreadsheet.add_worksheet(title=name, rows=1000, cols=5)
+            target_sheet.append_row(["Дата и время", "Статус", "IP-адрес"])
 
-        # Добавляем новую строчку с результатом в конец вкладки
-        ip_sheet.append_row([now_str, status])
+        # Добавляем новую строчку с результатом
+        target_sheet.append_row([now_str, status, ip])
 
-    print(f"Проверка успешно завершена. Обновлено вкладок: {len(ips)}")
+    print(f"Проверка успешно завершена. Обновлено вкладок: {len(targets)}")
 
 if __name__ == "__main__":
     main()
