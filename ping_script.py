@@ -46,27 +46,29 @@ def main():
     spreadsheet = client.open_by_key(sheet_id)
     main_sheet = spreadsheet.worksheet("Мониторинг")
 
-    # Читаем все строки с листа Мониторинг (столбец A = индекс 0, столбец D = индекс 3)
-    all_rows = main_sheet.get_all_values()
-    if len(all_rows) < 2:
-        print("Список адресов пуст.")
-        return
+    # Читаем столбцы напрямую: A (IP) и D (Название города)
+    ips_col = main_sheet.col_values(1)
+    cities_col = main_sheet.col_values(4)
 
     targets = []
-    for row in all_rows[1:]:
-        ip = str(row).strip() if len(row) > 0 else ""
-        if not ip:
+    max_len = max(len(ips_col), len(cities_col))
+
+    for i in range(1, max_len):
+        ip = str(ips_col[i]).strip() if i < len(ips_col) else ""
+        raw_city = str(cities_col[i]).strip() if i < len(cities_col) else ""
+
+        if not ip or not raw_city:
             continue
-        # Берем название города из столбца D (четвертая колонка, индекс 3)
-        raw_name = str(row).strip() if len(row) > 3 else ""
-        name = raw_name.capitalize() if raw_name else ip
 
-        # Убираем запрещенные для названий вкладок символы
-        for bad_char in ['[', ']', '*', '/', '\\', '?', ':']:
-            name = name.replace(bad_char, '-')
-        targets.append((ip, name))
+        # Убираем любые цифры, точки и лишние символы — оставляем только буквы и пробелы/дефисы
+        clean_city = "".join(ch for ch in raw_city if ch.isalpha() or ch in (" ", "-")).strip().capitalize()
 
-    ips = [t for t in targets]
+        if not clean_city:
+            continue
+
+        targets.append((ip, clean_city))
+
+    ips = [ip for ip, _ in targets]
 
     # Пингуем все IP параллельно
     with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
@@ -76,22 +78,22 @@ def main():
     tz = timezone(timedelta(hours=2))
     now_str = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
 
-    # Получаем список уже существующих вкладок в таблице (приводим к нижнему регистру для надежного поиска)
+    # Ищем существующие вкладки по названию города (без учета регистра)
     existing_sheets = {ws.title.strip().lower(): ws for ws in spreadsheet.worksheets()}
 
-    # Записываем результат для каждого города в его вкладку
-    for (ip, name), status in zip(targets, ping_results):
-        lookup_key = name.strip().lower()
+    for (ip, city_name), status in zip(targets, ping_results):
+        lookup_key = city_name.strip().lower()
         if lookup_key in existing_sheets:
             target_sheet = existing_sheets[lookup_key]
         else:
-            target_sheet = spreadsheet.add_worksheet(title=name, rows=1000, cols=5)
-            target_sheet.append_row(["Дата и время", "Статус", "IP-адрес"])
+            # Создаем вкладку ТОЛЬКО с названием города
+            target_sheet = spreadsheet.add_worksheet(title=city_name, rows=1000, cols=5)
+            target_sheet.append_row(["Дата и время", "Статус"])
 
-        # Добавляем новую строчку с результатом
-        target_sheet.append_row([now_str, status, ip])
+        # Записываем только дату/время и статус
+        target_sheet.append_row([now_str, status])
 
-    print(f"Проверка успешно завершена. Обновлено вкладок: {len(targets)}")
+    print(f"Проверка завершена. Обновлено вкладок: {len(targets)}")
 
 if __name__ == "__main__":
     main()
